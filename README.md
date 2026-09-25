@@ -1,56 +1,199 @@
-# Welcome to your Expo app 👋
+# 🌱 Blessing
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+> **What you don't need may be exactly what someone needs.**
 
-## Get started
+Blessing is a mobile-first, location-aware community platform where people can freely give away surplus resources — food, clothes, books, and more — and nearby people can discover, request, and receive them in real time.
 
-1. Install dependencies
+It's not a marketplace, a delivery app, or a donation portal. It's a way for unused resources to find the people who actually need them.
 
-   ```bash
-   npm install
-   ```
+---
 
-2. Start the app
+## 💡 The idea
 
-   ```bash
-   npx expo start
-   ```
+Every day, usable resources go to waste — a wedding with 50 extra meals, a family with clothes their kids outgrew, a household with books no one reads anymore. At the same time, someone nearby could use exactly that.
 
-In the output, you'll find options to open the app in a
+The problem isn't that resources don't exist. It's that **the person who has the excess doesn't know who needs it, and the person who needs it doesn't know where the excess is.**
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Blessing connects those two sides, in real time, based on location.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+---
 
-## Get a fresh project
+## ✨ Core concepts
 
-When you're ready, run:
+There's no rigid "donor" and "receiver" split — one person can do both.
 
-```bash
-npm run reset-project
+| Action | What it means |
+| --- | --- |
+| **Give a Blessing** | Post something you have in excess |
+| **Receive** | Claim something someone nearby is giving |
+| **Post a Need** | Say what you're looking for |
+| **Volunteer** | Help transport items between giver and receiver |
+
+### Categories
+
+🍱 Food · 👕 Clothes · 📚 Books · 🧸 Toys · 🪑 Furniture · 🏠 Household items · 🎒 School supplies · 💻 Electronics · 🍼 Baby supplies · 🛏️ Bedding · 🌱 Plants
+
+The initial focus is **food + everyday reusable items**, with the architecture built to support more categories over time.
+
+---
+
+## 🎯 Design philosophy
+
+Blessing should never feel like Zomato, Swiggy, Uber, Amazon, or OLX. There's no price, cart, checkout, or delivery fee — just giving, receiving, and community.
+
+It should feel:
+
+- Warm, human, and optimistic
+- Trustworthy and dignified for both givers and receivers
+- Simple enough to understand a listing in 5 seconds
+
+**Visual language:** bright sky gradients, soft clouds, rounded cards, generous spacing — nature and warmth, not a corporate dashboard.
+
+```
+Primary gradient (center → edge):
+#FFFFFF → #F7FCFF → #E9F8FD → #CDEFFA → #9EDAF2 → #72C2E5
+
+Brand colors:
+Blessing Green   #247A59
+Dark Green       #176044
+Text             #164238
+Accent (gold)    #E9B83F
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+---
 
-### Other setup steps
+## 🔁 Core product loops
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+**Giving:**
 
-## Learn more
+```
+Have excess → Create Blessing → Add photos, details, location
+  → Publish → Nearby users discover it → Someone requests it
+  → Pickup confirmed → Handover → Completed → Impact recorded
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+**Needing:**
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```
+Need something → Create Need → Nearby people/orgs see it
+  → Someone responds → Resource provided → Need fulfilled
+```
 
-## Join the community
+---
 
-Join our community of developers creating universal apps.
+## 📱 App structure
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+**Bottom navigation:** Home · Explore · Give · Activity · Profile
+
+- **Home** — nearby Blessings, personalized to your area
+- **Explore** — browse Blessings and Needs by category, plus a live map
+- **Give** — guided flow to post a Blessing (category → details → photos → location → availability → publish)
+- **Activity** — your claims, requests, and messages
+- **Profile** — identity, impact stats, verification, settings
+
+### Blessing status lifecycle
+
+```
+DRAFT → PUBLISHED → AVAILABLE → RESERVED → CLAIMED → PICKED_UP → COMPLETED
+                        ↓
+                 EXPIRED / CANCELLED / REPORTED
+```
+
+---
+
+## 🏗️ Tech stack
+
+**Mobile app**
+
+- React Native + Expo (SDK 57) + TypeScript
+- Expo Router
+- NativeWind (Tailwind for React Native)
+- Zustand for local state, TanStack React Query for server state
+- React Native Reanimated + Gesture Handler for motion
+
+**Backend**
+
+- Supabase — Postgres + **PostGIS** (location-aware "nearby" queries), Auth, Storage, and Realtime
+- Postgres functions + Row Level Security for core rules (claim limits, status transitions)
+- Supabase Edge Functions for logic that needs external calls (push notifications, matching)
+
+**Auth**
+
+- Phone (OTP), Email, Google — via Supabase Auth
+
+**Notifications**
+
+- Expo Notifications / FCM / APNs
+
+**Images**
+
+- Supabase Storage, with compression before upload
+
+---
+
+## 🗺️ Key features
+
+- **Live map** of nearby Blessings and Needs, with category markers
+- **Smart expiration** for food (best-before timers, auto-removal from discovery)
+- **Claim system** that prevents over-claiming (server-enforced, not client-side)
+- **In-app messaging**, unlocked only after a request is accepted
+- **Impact tracking** — meals shared, items reused, people helped — instead of money-based metrics
+- **Trust signals** — phone/email verification, completed Blessings, no public exposure of exact home addresses
+- **Reporting & moderation** for unsafe, misleading, or spam listings
+
+---
+
+## 🚧 Roadmap
+
+**MVP**
+
+- [x] Onboarding
+- [ ] Authentication
+- [ ] Home feed (nearby Blessings)
+- [ ] Blessing details screen
+- [ ] Create Blessing flow
+- [ ] Categories & photos
+- [ ] Location & PostGIS nearby queries
+- [ ] Claim / Receive flow
+- [ ] Basic messaging
+- [ ] Notifications
+- [ ] Profile & Activity
+- [ ] Basic reporting
+
+**Phase 2**
+
+- [ ] Needs system & matching
+- [ ] Live community map
+- [ ] Full realtime feed
+- [ ] Impact dashboard
+- [ ] Organization accounts
+
+**Phase 3**
+
+- [ ] Volunteer delivery network
+- [ ] Event Mode (pre-register expected surplus from weddings/events)
+- [ ] Recurring giving (bakeries, hostels, messes)
+- [ ] Advanced moderation & admin dashboard
+
+---
+
+## 🔒 Safety & trust
+
+Because food and physical items are involved:
+
+- Food listings require prep time, best-before time, veg/non-veg/Jain tags, and storage info
+- Exact addresses are never shown publicly — only approximate pickup locations
+- No-show tracking and rate limiting to prevent abuse
+- Clear reporting flow for unsafe, fake, or spam listings
+
+---
+
+## 🧭 One-line pitch
+
+> Blessing is a mobile-first, location-aware community platform where people can freely give away excess food and useful items, while nearby people discover, request, and receive them in real time — turning what would go to waste into what someone else needs.
+
+---
+
+## 📄 License
+
+_TBD_
