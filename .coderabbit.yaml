@@ -1,0 +1,25 @@
+# .coderabbit.yaml
+language: "en-US"
+early_access: false
+
+reviews:
+  profile: "chill"          # "chill" or "assertive" — chill is lighter-touch, good for solo/early-stage
+  request_changes_workflow: false
+  high_level_summary: true
+  auto_review:
+    enabled: true
+    drafts: false           # skip draft PRs
+  path_instructions:
+    - path: "app/**"
+      instructions: "This is an Expo Router app using NativeWind. Flag any inline styles that should use Tailwind classes, and any screen missing safe-area handling."
+    - path: "supabase/**"
+      instructions: "Check RLS policies carefully — this project relies on Postgres RLS to prevent over-claiming on the claims table, not client-side checks."
+    - path: "**/*.sql"
+      instructions: "Flag any migration that doesn't handle the Blessing status state machine (DRAFT→PUBLISHED→AVAILABLE→RESERVED→CLAIMED→PICKED_UP→COMPLETED) correctly."
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: "auto"
