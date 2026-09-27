@@ -8,7 +8,12 @@
     "scheme": "blessing",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Blessing uses your location to show nearby Blessings and Needs.",
+        "NSCameraUsageDescription": "Blessing needs camera access so you can take a photo of what you're giving.",
+        "NSPhotoLibraryUsageDescription": "Blessing needs access to your photos so you can add pictures to a Blessing."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,6 +22,11 @@
         "backgroundImage": "",
         "monochromeImage": ""
       },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -26,6 +36,19 @@
     "plugins": [
       "expo-router",
       [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Blessing uses your location to show nearby Blessings and Needs, and to set the pickup point when you give something."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Blessing needs access to your photos so you can add pictures to what you're giving.",
+          "cameraPermission": "Blessing needs camera access so you can take a photo of what you're giving."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
@@ -33,6 +56,7 @@
           "imageWidth": 76
         }
       ],
+      
       "expo-status-bar",
       "expo-image",
       "expo-sqlite"
@@ -43,3 +67,6 @@
     }
   }
 }
+
+
+
