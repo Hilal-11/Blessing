@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -24,6 +24,7 @@ export default function OTP() {
   const [error, setError] = useState<string | undefined>();
   const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
   const router = useRouter()
+  const { mode, identifier } = useLocalSearchParams<{ mode: "email" | "phone"; identifier: string }>();
   const inputs = useRef<(TextInput | null)[]>([]);
  
   // Countdown for the resend timer
@@ -46,6 +47,13 @@ export default function OTP() {
     if (digit && index < OTP_LENGTH - 1) {
       inputs.current[index + 1]?.focus();
     }
+    const digits = text.replace(/\D/g, "");
+    if (digits.length > 1) {
+      const filled = digits.slice(0, OTP_LENGTH).split("");
+      setOtp([...filled, ...Array(OTP_LENGTH - filled.length).fill("")]);
+      inputs.current[Math.min(filled.length, OTP_LENGTH - 1)]?.focus();
+      return;
+    }
   };
  
   const handleKeyPress = (
@@ -66,28 +74,57 @@ export default function OTP() {
   const isComplete = code.length === OTP_LENGTH;
  
   const handleVerify = async () => {
-    if (!isComplete) return;
+    if (!isComplete || loading || !identifier) return;
     setLoading(true);
     setError(undefined);
     try {
-      // TODO: replace with supabase.auth.verifyOtp({ phone, token: code, type: 'sms' })
-      await new Promise((resolve) => setTimeout(resolve, 900));
-      // navigate on success, e.g. router.replace("/(auth)/profile-setup")
-      router.push('/(auth)/location-permission')
+      const { error } =
+        mode === "email"
+          ? await supabase.auth.verifyOtp({ email: identifier, token: code, type: "signup" })
+          : await supabase.auth.verifyOtp({ phone: identifier, token: code, type: "sms" });
+
+      if (error) {
+        setError(
+          error.message.toLowerCase().includes("expired")
+            ? "Code expired. Request a new one."
+            : "Invalid code. Please try again."
+        );
+        setOtp(Array(OTP_LENGTH).fill(""));
+        inputs.current[0]?.focus();
+        return;
+      }
+
+      // Session is now set and the DB trigger has already created the users row
+      router.replace("/(auth)/location-permission");
     } catch {
-      setError("That code didn't work. Please try again.");
+      setError("Something went wrong. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
   };
- 
-  const handleResend = () => {
-    if (secondsLeft > 0) return;
-    // TODO: replace with supabase.auth.signInWithOtp({ phone })
-    setOtp(Array(OTP_LENGTH).fill(""));
-    setSecondsLeft(RESEND_SECONDS);
-    inputs.current[0]?.focus();
+
+  const handleResend = async () => {
+    if (secondsLeft > 0 || !identifier) return;
+    setError(undefined);
+    try {
+      const { error } =
+        mode === "email"
+          ? await supabase.auth.resend({ type: "signup", email: identifier })
+          : await supabase.auth.signInWithOtp({ phone: identifier });
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      setOtp(Array(OTP_LENGTH).fill(""));
+      setSecondsLeft(RESEND_SECONDS);
+      inputs.current[0]?.focus();
+    } catch {
+      setError("Couldn't resend the code. Try again.");
+    }
   };
+  
+  
   return (
     <SafeAreaView className="flex-1 bg-white relative" edges={["top", "bottom"]}>
       <View className="px-6 pt-2">
@@ -129,8 +166,12 @@ export default function OTP() {
                 </View>
               </View>
               <View className="flex-col gap-2 justify-center items-center pt-4">
-                <Text className="text-neutral-200 font-bold font-sans text-2xl ">Check your email or phone</Text>
-                <Text className="font-medium text-sm font-sans text-neutral-300 w-1/2 text-center">Enter the unique code sent to email or phone</Text>
+                <Text className="text-neutral-200 font-bold font-sans text-2xl">
+                  Check your {mode === "email" ? "email" : "phone"}
+                </Text>
+                <Text className="font-medium text-sm font-sans text-neutral-300 w-3/4 text-center">
+                  Enter the 6-digit code sent to {identifier}
+                </Text>              
               </View>
             </View>
             <View className="pt-6 px-10 flex-row justify-between">

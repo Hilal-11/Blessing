@@ -1,12 +1,13 @@
-'use client';
-
+import { supabase } from "@/lib/supabase";
 import { phoneRequestSchema, signupSchema } from "@/validations/AuthenticationValidations";
 import { Ionicons } from "@expo/vector-icons";
+import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-signin";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,21 +16,20 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { z } from "zod";
 
-// Kept local to this screen since the fields here (email + password only,
-// no confirmPassword/fullName) don't match the shape of signupSchema in
-// AuthValidation.tsx — reusing it would require fields that don't exist
-// on this form.
-const emailPasswordSchema = z.object({
-  email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
-  password: z.string().min(1, "Password is required"),
-});
 
-export default function SignupScreen() {
+
+
+
+export default function Signup() {
   const router = useRouter();
+  useEffect(() => {
+  GoogleSignin.configure({
+    webClientId: "878791573905-06m5nll9da4n609is8h3h2gb1gnnf6ea.apps.googleusercontent.com",
+  });
+}, []);
   const [showPassword, setShowPassword] = useState(false);
 
   // ---------- Email + password state ----------
@@ -44,52 +44,49 @@ export default function SignupScreen() {
   const isFormFilled = email.trim().length > 0 && password.length > 0;
 
   const handleContinue = async () => {
-  const result = signupSchema.safeParse({ email, password });
+    const result = signupSchema.safeParse({ email, password });
+    if (!result.success) {
+      const fe = result.error.flatten().fieldErrors;
+      setErrors({ email: fe.email?.[0], password: fe.password?.[0] });
+      return;
+    }
 
-  if (!result.success) {
-    const fieldErrors = result.error.flatten().fieldErrors;
-    setErrors({
-      email: fieldErrors.email?.[0],
-      password: fieldErrors.password?.[0],
-    });
-    return;
-  }
+    setErrors({});
+    setGeneralError(undefined);
+    setLoading(true);
 
-  setErrors({});
-  setGeneralError(undefined);
-  setLoading(true);
-  router.push("/(auth)/otp");
-  setLoading(false);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: result.data.email,
+        password: result.data.password,
+      });
 
-  // try {
-  //   // Use result.data, not the raw state — it's already trimmed/lowercased
-  //   // by the schema, so this is the clean, validated version.
-  //   const { data, error } = await supabase.auth.signUp({
-  //     email: result.data.email,
-  //     password: result.data.password,
-  //   });
+      if (error) {
+        if (error.message.toLowerCase().includes("password")) {
+          setErrors({ password: error.message });
+        } else {
+          setGeneralError(error.message);
+        }
+        return;
+      }
 
-  //   if (error) {
-  //     // Map the most common real-world Supabase auth errors to something
-  //     // the user can actually act on, instead of a raw error string.
-  //     if (error.message.toLowerCase().includes("already registered")) {
-  //       setErrors({ email: "This email is already registered. Try logging in instead." });
-  //     } else if (error.message.toLowerCase().includes("password")) {
-  //       setErrors({ password: error.message });
-  //     } else {
-  //       setGeneralError(error.message);
-  //     }
-  //     return;
-  //   }
+      // With email confirmation on, an existing email doesn't error —
+      // Supabase returns a user with an empty identities array.
+      if (data.user?.identities?.length === 0) {
+        setErrors({ email: "This email is already registered. Try logging in instead." });
+        return;
+      }
 
-  //   router.push("/(auth)/otp");
-  // } catch (err) {
-  //   // Network failure, timeout, etc. — not a validation or auth-logic error
-  //   setGeneralError("Something went wrong. Please check your connection and try again.");
-  // } finally {
-  //   setLoading(false);
-  // }
-};
+      router.push({
+        pathname: "/(auth)/otp",
+        params: { mode: "email", identifier: result.data.email },
+      });
+    } catch {
+      setGeneralError("Something went wrong. Check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ---------- Phone bottom sheet state ----------
   const [phoneModalVisible, setPhoneModalVisible] = useState(true);
@@ -106,12 +103,63 @@ export default function SignupScreen() {
     setPhoneError(undefined);
     setPhoneLoading(true);
     try {
-      // TODO: replace with supabase.auth.signInWithOtp({ phone: `+91${phone}` })
-      await new Promise((resolve) => setTimeout(resolve, 900));
+      const fullPhone = `+91${result.data.phone}`;
+      const { error } = await supabase.auth.signInWithOtp({ phone: fullPhone });
+      if (error) {
+        setPhoneError(error.message);
+        return;
+      }
       setPhoneModalVisible(false);
-      router.push("/(auth)/otp");
+      router.push({
+        pathname: "/(auth)/otp",
+        params: { mode: "phone", identifier: fullPhone },
+      });
+    } catch {
+      setPhoneError("Couldn't send the code. Try again.");
     } finally {
       setPhoneLoading(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    setGeneralError(undefined);
+    try {
+      const isAvailable = await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      if (!isAvailable) {
+        Alert.alert("Google Play Services not available", "Please install Google Play Services to sign in with Google.");
+        return;
+      }
+      const res = await GoogleSignin.signIn();
+      const idToken = res.data?.idToken;
+      if (!idToken) return;
+
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: idToken,
+      });
+      if (error) throw error;
+
+      router.replace("/(tabs)/home"); // your post-auth route
+    } catch (e: any) {
+      if (e.code === statusCodes.SIGN_IN_CANCELLED) {
+        return;
+      }
+      if (e.code === statusCodes.IN_PROGRESS) {
+        return;
+      }
+      if (e.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert("Google Play Services not available", "Please install Google Play Services to sign in with Google.");
+        return;
+      }
+      if (e.message?.includes("RNGoogleSignin") || e.message?.includes("TurboModuleRegistry")) {
+        Alert.alert(
+          "Development build required",
+          "Google Sign-In requires a development build. Run 'npx expo run:android' or 'npx expo run:ios' to create one.",
+          [{ text: "OK", onPress: () => {} }]
+        );
+        return;
+      }
+      setGeneralError("Google sign-in failed. Try again.");
     }
   };
 
@@ -247,11 +295,11 @@ export default function SignupScreen() {
 
         {/* Divider */}
         <View className="mt-10 flex-row items-center gap-4">
-          <View className="flex-1 h-px bg-neutral-300" />
+          <View className="flex-1 h-px bg-neutral-300"></View>
           <Text className="text-[14px] font-sans text-neutral-500 tracking-wide">
             Or
           </Text>
-          <View className="flex-1 h-px bg-neutral-300" />
+          <View className="flex-1 h-px bg-neutral-300"></View>
         </View>
 
         {/* Secondary action: Continue with email */}
@@ -259,7 +307,7 @@ export default function SignupScreen() {
 
         <View className="mt-6 gap-2">
           {/* Phone — full width — opens bottom sheet */}
-          <Pressable
+          <TouchableOpacity
             className="w-full h-15 flex-row items-center justify-start gap-6 rounded-full border pl-6 border-neutral-200 bg-white"
             onPress={() => setPhoneModalVisible(true)}
           >
@@ -270,12 +318,12 @@ export default function SignupScreen() {
             <Text className="text-[15px] font-sans font-semibold text-neutral-950">
               Continue with Phone
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         
           {/* Google + Apple — one row, equal width */}
-            <Pressable
+            <TouchableOpacity
               className="w-full h-15 flex-row items-center justify-start pl-6 gap-6 rounded-full border border-neutral-200 bg-white"
-              onPress={() => {}}
+              onPress={handleGoogle}
             >
               <Image
                 source={require("@/assets/images/google-icon.png")}
@@ -284,11 +332,10 @@ export default function SignupScreen() {
               <Text className="text-[15px] font-sans font-semibold text-neutral-950">
                 Continue with Google
               </Text>
-            </Pressable>
+            </TouchableOpacity>
         
-            <Pressable
+            <TouchableOpacity
               className="w-full h-15 flex-row items-center justify-start pl-6 gap-6 rounded-full border border-neutral-200 bg-white"
-              onPress={() => {}}
             >
               <Image
                 source={require("@/assets/images/apple-icon.png")}
@@ -297,7 +344,7 @@ export default function SignupScreen() {
               <Text className="text-[15px] font-sans font-semibold text-neutral-950">
                 Continue with Apple
               </Text>
-            </Pressable>
+            </TouchableOpacity>
         </View>
 
         {/* Login link */}
