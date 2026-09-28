@@ -1,0 +1,407 @@
+'use client';
+
+import { phoneRequestSchema, signupSchema } from "@/validations/AuthenticationValidations";
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from "react-native-safe-area-context";
+import { z } from "zod";
+
+// Kept local to this screen since the fields here (email + password only,
+// no confirmPassword/fullName) don't match the shape of signupSchema in
+// AuthValidation.tsx — reusing it would require fields that don't exist
+// on this form.
+const emailPasswordSchema = z.object({
+  email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
+  password: z.string().min(1, "Password is required"),
+});
+
+export default function Login() {
+  const router = useRouter();
+  const [showPassword, setShowPassword] = useState(false);
+
+  // ---------- Email + password state ----------
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [loading, setLoading] = useState(false);
+  const [generalError, setGeneralError] = useState<string | undefined>();
+  // Disabled until both fields have *something* in them — full validation
+  // (format checks) still runs on press, so this is just the "don't even
+  // let them try yet" gate, not the whole validation story.
+  const isFormFilled = email.trim().length > 0 && password.length > 0;
+
+  const handleContinue = async () => {
+  const result = signupSchema.safeParse({ email, password });
+
+  if (!result.success) {
+    const fieldErrors = result.error.flatten().fieldErrors;
+    setErrors({
+      email: fieldErrors.email?.[0],
+      password: fieldErrors.password?.[0],
+    });
+    return;
+  }
+
+  setErrors({});
+  setGeneralError(undefined);
+  setLoading(true);
+
+  try {
+    // Use result.data, not the raw state — it's already trimmed/lowercased
+    // by the schema, so this is the clean, validated version.
+    const { data, error } = await supabase.auth.signUp({
+      email: result.data.email,
+      password: result.data.password,
+    });
+
+    if (error) {
+      // Map the most common real-world Supabase auth errors to something
+      // the user can actually act on, instead of a raw error string.
+      if (error.message.toLowerCase().includes("already registered")) {
+        setErrors({ email: "This email is already registered. Try logging in instead." });
+      } else if (error.message.toLowerCase().includes("password")) {
+        setErrors({ password: error.message });
+      } else {
+        setGeneralError(error.message);
+      }
+      return;
+    }
+
+    router.push("/(auth)/otp");
+  } catch (err) {
+    // Network failure, timeout, etc. — not a validation or auth-logic error
+    setGeneralError("Something went wrong. Please check your connection and try again.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // ---------- Phone bottom sheet state ----------
+  const [phoneModalVisible, setPhoneModalVisible] = useState(true);
+  const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState<string | undefined>();
+  const [phoneLoading, setPhoneLoading] = useState(false);
+
+  const handlePhoneContinue = async () => {
+    const result = phoneRequestSchema.safeParse({ phone });
+    if (!result.success) {
+      setPhoneError(result.error.flatten().fieldErrors.phone?.[0]);
+      return;
+    }
+    setPhoneError(undefined);
+    setPhoneLoading(true);
+    try {
+      // TODO: replace with supabase.auth.signInWithOtp({ phone: `+91${phone}` })
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      setPhoneModalVisible(false);
+      router.push("/(auth)/otp");
+    } finally {
+      setPhoneLoading(false);
+    }
+  };
+
+  return (
+
+    <SafeAreaView className="flex-1 bg-white" style={{flex:1}} edges={["top", "bottom"]}>
+      <View className="flex-1 px-8">
+        {/* Back button */}
+        <View className="pt-3">
+          <Pressable
+            onPress={() => router.back()}
+            className="h-11 w-11 items-center justify-center rounded-full bg-neutral-950"
+          >
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+          </Pressable>
+        </View>
+
+        {/* Logo */}
+        <View className="flex-row justify-center items-center gap-2 mt-8">
+          <Image
+            source={require("@/assets/images/blessing.png")}
+            style={{ width: 35, height: 35 }}
+          />
+          <Text className="text-4xl font-bold font-mono">BLESSINGS</Text>
+        </View>
+
+        {/* Title and subtitle */}
+        <View className="mt-16 items-center text-center px-4">
+          <Text className="text-[32px] font-bold font-sans text-neutral-950">
+            Hi There ! 
+          </Text>
+          <View className="mt-1 px-4">
+            <Text className="text-[16px] font-sans font-medium text-neutral-600 text-center">
+              Please enter required details to continue
+            </Text>
+          </View>
+        </View>
+
+        {/* Primary action: Continue with phone */}
+        <View className="w-full pt-10 flex gap-2">
+
+          <View>
+            <View className="h-[56px] w-full flex-row items-center rounded-full border border-[#DDE9E6] bg-white pl-5">
+              {/* Email icon */}
+              <Ionicons
+                name="mail"
+                size={22}
+                color="#262626"
+                style={{ marginRight: 10 }}
+              />
+
+              <TextInput
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (errors.email) setErrors((e) => ({ ...e, email: undefined }));
+                }}
+                placeholder="Enter your email"
+                placeholderTextColor="#404040"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                className="flex-1 text-[16px] text-neutral-900 font-sans font-medium"
+              />
+
+            </View>
+            {errors.email ? (
+              <Text className="text-red-500 text-xs mt-1 ml-4">{errors.email}</Text>
+            ) : null}
+          </View>
+
+          <View className="mt-3">
+            <View className="h-[56px] w-full flex-row items-center rounded-full border border-[#DDE9E6] bg-white pl-5 pr-4">
+
+              {/* Password icon */}
+              <Ionicons
+                name="lock-closed"
+                size={20}
+                color="#262626"
+                style={{ marginRight: 10 }}
+              />
+
+              <TextInput
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (errors.password) setErrors((e) => ({ ...e, password: undefined }));
+                }}
+                placeholder="Enter your password"
+                placeholderTextColor="#404040"
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                className="flex-1 text-[16px] text-neutral-900 font-sans font-medium"
+              />
+
+              {/* Show / Hide password */}
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                className="ml-2 h-10 w-10 items-center justify-center"
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off" : "eye"}
+                  size={21}
+                  color="#262626"
+                />
+              </TouchableOpacity>
+
+            </View>
+            {errors.password ? (
+              <Text className="text-red-500 text-xs mt-1 ml-4">{errors.password}</Text>
+            ) : null}
+          </View>
+          <View className="flex w-full justify-end pt-1 pr-3  ">
+            <TouchableOpacity className="w-full flex-row justify-end">
+              <Text className="font-semibold text-sm underline font-sans text-end">Forgot Password</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View className="mt-3 w-full">
+          <TouchableOpacity
+            activeOpacity={0.8}
+            disabled={!isFormFilled || loading}
+            className="h-15 w-full items-center justify-center rounded-full bg-neutral-950"
+            style={{ opacity: !isFormFilled || loading ? 0.4 : 1 }}
+            onPress={handleContinue}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text className="text-[16px] font-bold text-neutral-100">
+                Continue
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Divider */}
+        <View className="mt-10 flex-row items-center gap-4">
+          <View className="flex-1 h-px bg-neutral-300" />
+          <Text className="text-[14px] font-sans text-neutral-500 tracking-wide">
+            Or
+          </Text>
+          <View className="flex-1 h-px bg-neutral-300" />
+        </View>
+
+        {/* Secondary action: Continue with email */}
+        
+
+        <View className="mt-6 gap-2">
+          {/* Phone — full width — opens bottom sheet */}
+          <Pressable
+            className="w-full h-15 flex-row items-center justify-start gap-6 rounded-full border pl-6 border-neutral-200 bg-white"
+            onPress={() => setPhoneModalVisible(true)}
+          >
+            <Image
+              source={require("@/assets/images/phone-icon.png")}
+              style={{ width: 20, height: 20 }}
+            />
+            <Text className="text-[15px] font-sans font-semibold text-neutral-950">
+              Continue with Phone
+            </Text>
+          </Pressable>
+        
+          {/* Google + Apple — one row, equal width */}
+            <Pressable
+              className="w-full h-15 flex-row items-center justify-start pl-6 gap-6 rounded-full border border-neutral-200 bg-white"
+              onPress={() => {}}
+            >
+              <Image
+                source={require("@/assets/images/google-icon.png")}
+                style={{ width: 20, height: 20 }}
+              />
+              <Text className="text-[15px] font-sans font-semibold text-neutral-950">
+                Continue with Google
+              </Text>
+            </Pressable>
+        
+            <Pressable
+              className="w-full h-15 flex-row items-center justify-start pl-6 gap-6 rounded-full border border-neutral-200 bg-white"
+              onPress={() => {}}
+            >
+              <Image
+                source={require("@/assets/images/apple-icon.png")}
+                style={{ width: 20, height: 20 }}
+              />
+              <Text className="text-[15px] font-sans font-semibold text-neutral-950">
+                Continue with Apple
+              </Text>
+            </Pressable>
+        </View>
+
+        {/* Login link */}
+        <View className="mt-2 flex-row justify-center items-center gap-2">
+          <Text className="text-[15px] font-sans text-neutral-500">
+            Create a new account
+          </Text>
+          <Pressable onPress={() => router.replace("/(auth)/signup")}>
+            <Text className="text-[15px] font-sans font-bold text-neutral-950 underline">
+              Sign up
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Terms and Privacy */}
+        <View className="absolute bottom-0 left-5 text-center w-full flex-row justify-center gap-4  items-center">
+          <Pressable onPress={() => {}}>
+            <Text className="text-[13px] font-bold font-sans text-neutral-500 underline">
+              Terms of Service
+            </Text>
+          </Pressable>
+          <Text className="text-[13px] font-sans text-neutral-300">|</Text>
+          <Pressable onPress={() => {}}>
+            <Text className="text-[13px] font-bold font-sans text-neutral-500 underline">
+              Privacy Policy
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* ---------- Phone bottom sheet ---------- */}
+      <Modal
+        visible={phoneModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPhoneModalVisible(false)}
+      >
+        {/* Backdrop — tap outside the sheet to dismiss */}
+        <Pressable
+          className="flex-1 bg-black/40"
+          onPress={() => setPhoneModalVisible(false)}
+        />
+
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View className="bg-white rounded-t-3xl px-8 pt-3 pb-8">
+            {/* Drag handle (cosmetic) */}
+            <View className="self-center w-10 h-1.5 rounded-full bg-neutral-200 mb-6" />
+
+            <Text className="text-[22px] font-bold font-sans text-neutral-950 mb-1">
+              Continue with phone
+            </Text>
+            <Text className="text-[14px] font-sans text-neutral-500 mb-6">
+              We&apos;ll text you a code to verify your number.
+            </Text>
+
+            <View>
+              <View className="h-[56px] w-full flex-row items-center rounded-full border border-[#DDE9E6] bg-white pl-5">
+                <Text className="text-[16px] font-sans font-medium text-neutral-900 mr-2">
+                  +91
+                </Text>
+                <View className="w-px h-6 bg-neutral-200 mr-2" />
+                <TextInput
+                  value={phone}
+                  onChangeText={(text) => {
+                    setPhone(text);
+                    if (phoneError) setPhoneError(undefined);
+                  }}
+                  placeholder="000 000 000 "
+                  placeholderTextColor="#d1d5dc"
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  className="flex-1 text-[16px] text-neutral-900 font-sans font-medium"
+                />
+              </View>
+              {phoneError ? (
+                <Text className="text-red-500 text-xs mt-1 ml-4">{phoneError}</Text>
+              ) : null}
+            </View>
+
+            <View className="mt-5 w-full">
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={phone.trim().length === 0 || phoneLoading}
+                className="h-15 w-full items-center justify-center rounded-full bg-neutral-950"
+                style={{ opacity: phone.trim().length === 0 || phoneLoading ? 0.4 : 1 }}
+                onPress={handlePhoneContinue}
+              >
+                {phoneLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text className="text-[16px] font-bold text-neutral-100">
+                    Continue
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </SafeAreaView>
+  );
+}
