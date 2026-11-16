@@ -120,7 +120,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   const movePill = (routeKey: string, animate: boolean) => {
     const layout = layoutsRef.current[routeKey];
-    if (!layout) return;
+    if (!layout) return false; 
     const target = layout.x + layout.width / 2 - PILL_SIZE.width / 2;
 
     if (animate) {

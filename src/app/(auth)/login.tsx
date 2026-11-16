@@ -1,12 +1,18 @@
-'use client';
-
-import { phoneRequestSchema, signupSchema } from "@/validations/AuthenticationValidations";
+import { supabase } from "@/lib/supabase";
+import { phoneRequestSchema } from "@/validations/AuthenticationValidations";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -32,62 +38,74 @@ export default function Login() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
 
+  // Same guard as signup.tsx — configure() touches a native TurboModule
+  // that won't exist in Expo Go or a stale dev build.
+  const googleAvailable = useRef(true);
+  useEffect(() => {
+    try {
+      GoogleSignin.configure({
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      });
+    } catch (e) {
+      googleAvailable.current = false;
+      if (__DEV__) {
+        console.warn(
+          "GoogleSignin.configure() failed — RNGoogleSignin native module isn't linked. " +
+            "Rebuild with: npx expo prebuild --clean && npx expo run:android",
+          e
+        );
+      }
+    }
+  }, []);
+
   // ---------- Email + password state ----------
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [loading, setLoading] = useState(false);
   const [generalError, setGeneralError] = useState<string | undefined>();
-  // Disabled until both fields have *something* in them — full validation
-  // (format checks) still runs on press, so this is just the "don't even
-  // let them try yet" gate, not the whole validation story.
   const isFormFilled = email.trim().length > 0 && password.length > 0;
 
   const handleContinue = async () => {
-  const result = signupSchema.safeParse({ email, password });
+    const result = emailPasswordSchema.safeParse({ email, password });
 
-  if (!result.success) {
-    const fieldErrors = result.error.flatten().fieldErrors;
-    setErrors({
-      email: fieldErrors.email?.[0],
-      password: fieldErrors.password?.[0],
-    });
-    return;
-  }
-
-  setErrors({});
-  setGeneralError(undefined);
-  setLoading(true);
-
-  try {
-    // Use result.data, not the raw state — it's already trimmed/lowercased
-    // by the schema, so this is the clean, validated version.
-    const { data, error } = await supabase.auth.signUp({
-      email: result.data.email,
-      password: result.data.password,
-    });
-
-    if (error) {
-      // Map the most common real-world Supabase auth errors to something
-      // the user can actually act on, instead of a raw error string.
-      if (error.message.toLowerCase().includes("already registered")) {
-        setErrors({ email: "This email is already registered. Try logging in instead." });
-      } else if (error.message.toLowerCase().includes("password")) {
-        setErrors({ password: error.message });
-      } else {
-        setGeneralError(error.message);
-      }
+    if (!result.success) {
+      const fieldErrors = result.error.flatten().fieldErrors;
+      setErrors({
+        email: fieldErrors.email?.[0],
+        password: fieldErrors.password?.[0],
+      });
       return;
     }
 
-    router.push("/(auth)/otp");
-  } catch (err) {
-    // Network failure, timeout, etc. — not a validation or auth-logic error
-    setGeneralError("Something went wrong. Please check your connection and try again.");
-  } finally {
-    setLoading(false);
-  }
-};
+    setErrors({});
+    setGeneralError(undefined);
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: result.data.email,
+        password: result.data.password,
+      });
+
+      if (error) {
+        if (error.message.toLowerCase().includes("invalid login credentials")) {
+          setGeneralError("Incorrect email or password.");
+        } else if (error.message.toLowerCase().includes("email not confirmed")) {
+          setGeneralError("Please confirm your email before logging in.");
+        } else {
+          setGeneralError(error.message);
+        }
+        return;
+      }
+
+      router.replace("/(tabs)/home");
+    } catch {
+      setGeneralError("Something went wrong. Please check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ---------- Phone bottom sheet state ----------
   const [phoneModalVisible, setPhoneModalVisible] = useState(true);
@@ -104,12 +122,88 @@ export default function Login() {
     setPhoneError(undefined);
     setPhoneLoading(true);
     try {
-      // TODO: replace with supabase.auth.signInWithOtp({ phone: `+91${phone}` })
-      await new Promise((resolve) => setTimeout(resolve, 900));
+      const fullPhone = `+91${result.data.phone}`;
+      const { error } = await supabase.auth.signInWithOtp({ phone: fullPhone });
+      if (error) {
+        setPhoneError(error.message);
+        return;
+      }
       setPhoneModalVisible(false);
-      router.push("/(auth)/otp");
+      router.push({
+        pathname: "/(auth)/otp",
+        params: { mode: "phone", identifier: fullPhone },
+      });
+    } catch {
+      setPhoneError("Couldn't send the code. Try again.");
     } finally {
       setPhoneLoading(false);
+    }
+  };
+
+  // ---------- Google sign-in (native GoogleSignin) ----------
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGoogle = async () => {
+    setGeneralError(undefined);
+
+    if (!googleAvailable.current) {
+      Alert.alert(
+        "Development build required",
+        "Google Sign-In requires a development build. Run 'npx expo run:android' or 'npx expo run:ios' to create one."
+      );
+      return;
+    }
+
+    setGoogleLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const response = await GoogleSignin.signIn();
+
+      if (!isSuccessResponse(response)) {
+        // user cancelled — not an error
+        return;
+      }
+
+      const idToken = response.data.idToken;
+      if (!idToken) {
+        setGeneralError("Google didn't return an ID token.");
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: idToken,
+      });
+      if (error) throw error;
+
+      router.replace("/(tabs)/home");
+    } catch (e) {
+      if (isErrorWithCode(e)) {
+        switch (e.code) {
+          case statusCodes.IN_PROGRESS:
+            return;
+          case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+            Alert.alert(
+              "Google Play Services not available",
+              "Please install Google Play Services to sign in with Google."
+            );
+            return;
+          default:
+            if (e.message?.includes("RNGoogleSignin") || e.message?.includes("TurboModuleRegistry")) {
+              googleAvailable.current = false;
+              Alert.alert(
+                "Development build required",
+                "Google Sign-In requires a development build. Run 'npx expo run:android' or 'npx expo run:ios' to create one."
+              );
+              return;
+            }
+            setGeneralError("Google sign-in failed. Try again.");
+        }
+      } else {
+        setGeneralError("Google sign-in failed. Try again.");
+      }
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -230,6 +324,9 @@ export default function Login() {
             </TouchableOpacity>
           </View>
         </View>
+        {generalError ? (
+          <Text className="text-red-500 text-xs mt-1 text-center">{generalError}</Text>
+        ) : null}
         <View className="mt-3 w-full">
           <TouchableOpacity
             activeOpacity={0.8}
@@ -278,12 +375,18 @@ export default function Login() {
           {/* Google + Apple — one row, equal width */}
             <Pressable
               className="w-full h-15 flex-row items-center justify-start pl-6 gap-6 rounded-full border border-neutral-200 bg-white"
-              onPress={() => {}}
+              onPress={handleGoogle}
+              disabled={googleLoading}
+              style={{ opacity: googleLoading ? 0.6 : 1 }}
             >
-              <Image
-                source={require("@/assets/images/google-icon.png")}
-                style={{ width: 20, height: 20 }}
-              />
+              {googleLoading ? (
+                <ActivityIndicator size="small" color="#262626" />
+              ) : (
+                <Image
+                  source={require("@/assets/images/google-icon.png")}
+                  style={{ width: 20, height: 20 }}
+                />
+              )}
               <Text className="text-[15px] font-sans font-semibold text-neutral-950">
                 Continue with Google
               </Text>

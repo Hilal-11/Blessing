@@ -8,19 +8,17 @@
     "scheme": "blessing",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.hilal.blessing",
       "icon": "./assets/expo.icon",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Blessing uses your location to show nearby Blessings and Needs.",
-        "NSCameraUsageDescription": "Blessing needs camera access so you can take a photo of what you're giving.",
-        "NSPhotoLibraryUsageDescription": "Blessing needs access to your photos so you can add pictures to a Blessing."
+        "NSLocationWhenInUseUsageDescription": "Blessing uses your location to show nearby Blessings and Needs."
       }
     },
     "android": {
+      "package": "com.hilal.blessing",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "",
-        "backgroundImage": "",
-        "monochromeImage": ""
+        "foregroundImage": "./assets/expo.icon/Assets/blessing2.png",
+        "backgroundColor": "#E6F4FE"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
@@ -38,7 +36,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Blessing uses your location to show nearby Blessings and Needs, and to set the pickup point when you give something."
+          "locationWhenInUsePermission": "Blessing uses your location to show nearby Blessings and Needs, and to set the pickup point when you give something."
         }
       ],
       [
@@ -52,7 +50,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/expo.icon/Assets/blessing2.png",
           "imageWidth": 76
         }
       ],
