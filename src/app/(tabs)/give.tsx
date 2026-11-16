@@ -11,7 +11,7 @@ export default function Give() {
   return (
     <SafeAreaView className="flex-1 bg-gray-50 dark:bg-gray-900">
       <View className="flex-1 items-center justify-center px-6">
-        <Ionicons name="gift" size={80} color="#8b5cf6" className="mb-6" />
+        <Ionicons name="gift" size={80} color="#000000" className="mb-6" />
         <Text className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Give a Blessing</Text>
         <Text className="text-gray-500 dark:text-gray-400 text-center mb-8 max-w-md">
           Share your abundance with those in need. Every gift makes a difference.
