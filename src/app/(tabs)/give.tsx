@@ -23,7 +23,7 @@ export default function Give() {
             className="w-full bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 flex-row items-center gap-4 shadow-sm"
           >
             <View className="w-12 h-12 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-              <Ionicons name="cash" size={24} color="#8b5cf6" />
+              <Ionicons name="cash" size={24} color="#ff00ff" />
             </View>
             <View>
               <Text className="font-semibold text-gray-900 dark:text-white">Financial Gift</Text>
