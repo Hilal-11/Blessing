@@ -16,7 +16,7 @@ export default function Activity() {
               { type: 'prayer', text: 'You prayed for Sarah', time: '2h ago', icon: 'heart', color: '#000000' },
               { type: 'blessing', text: 'John sent you a blessing', time: '5h ago', icon: 'gift', color: '#00ff00' },
               { type: 'prayer', text: 'Your request received 10 prayers', time: '1d ago', icon: 'heart', color: '#ffffff' },
-              { type: 'blessing', text: 'You blessed Maria\'s family', time: '2d ago', icon: 'gift', color: '#8b5cf6' },
+              { type: 'blessing', text: 'You blessed Maria\'s family', time: '2d ago', icon: 'gift', color: '#0011ff' },
               { type: 'prayer', text: 'New prayer request in your area', time: '3d ago', icon: 'heart', color: '#ec4899' },
             ].map((item, i) => (
               <View key={i} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex-row gap-4">
