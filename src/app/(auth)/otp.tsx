@@ -1,3 +1,4 @@
+import { supabase } from "@/lib/supabase";
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -35,24 +36,29 @@ export default function OTP() {
   }, [secondsLeft]);
  
   const handleChange = (text: string, index: number) => {
+    const digits = text.replace(/\D/g, "");
+
+    // Pasting the whole code into one box — fill every box at once and
+    // stop, so we never also run the single-digit path below for the
+    // same keystroke.
+    if (digits.length > 1) {
+      const filled = digits.slice(0, OTP_LENGTH).split("");
+      setOtp([...filled, ...Array(OTP_LENGTH - filled.length).fill("")]);
+      if (error) setError(undefined);
+      inputs.current[Math.min(filled.length, OTP_LENGTH - 1)]?.focus();
+      return;
+    }
+
     // Only allow a single digit per box
-    const digit = text.replace(/[^0-9]/g, "").slice(-1);
- 
+    const digit = digits.slice(-1);
     const next = [...otp];
     next[index] = digit;
     setOtp(next);
     if (error) setError(undefined);
- 
+
     // Auto-move to the next box once a digit is entered
     if (digit && index < OTP_LENGTH - 1) {
       inputs.current[index + 1]?.focus();
-    }
-    const digits = text.replace(/\D/g, "");
-    if (digits.length > 1) {
-      const filled = digits.slice(0, OTP_LENGTH).split("");
-      setOtp([...filled, ...Array(OTP_LENGTH - filled.length).fill("")]);
-      inputs.current[Math.min(filled.length, OTP_LENGTH - 1)]?.focus();
-      return;
     }
   };
  

@@ -1,5 +1,4 @@
 import * as ImagePicker from "expo-image-picker";
-import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Text } from "react-native";
@@ -15,27 +14,19 @@ export default function PermissionsScreen() {
     hasRun.current = true;
 
     const requestPermissions = async () => {
-      // ---- Location first ----
+      // Location moved to Home — it's requested contextually there instead
+      // of as a blocking step here, and only Home actually reads/stores
+      // coordinates.
       setStatusText("Just a moment...");
-      const currentLocation = await Location.getForegroundPermissionsAsync();
-      if (currentLocation.status !== "granted" && currentLocation.canAskAgain) {
-        // This line triggers the real native OS dialog for location
-        await Location.requestForegroundPermissionsAsync();
-      }
-
-      // ---- Then camera — MUST wait for the location dialog to fully close
-      // first; the OS won't show a second permission popup while one is
-      // already on screen, so firing both at once (without await) either
-      // silently drops the second request or queues unpredictably. ----
       const currentCamera = await ImagePicker.getCameraPermissionsAsync();
       if (currentCamera.status !== "granted" && currentCamera.canAskAgain) {
         await ImagePicker.requestCameraPermissionsAsync();
       }
 
-      // Whatever the user chose on either dialog, move on — never block
-      // onboarding on a permission grant. Blessing should degrade
-      // gracefully (ask again later, right when a feature actually needs it)
-      // rather than trap the user here.
+      // Whatever the user chose, move on — never block onboarding on a
+      // permission grant. Blessing should degrade gracefully (ask again
+      // later, right when a feature actually needs it) rather than trap
+      // the user here.
       router.replace("/(tabs)/home");
     };
 

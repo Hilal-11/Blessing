@@ -1,10 +1,15 @@
 import { supabase } from "@/lib/supabase";
-import { phoneRequestSchema, signupSchema } from "@/validations/AuthenticationValidations";
+import { phoneRequestSchema } from "@/validations/AuthenticationValidations";
 import { Ionicons } from "@expo/vector-icons";
-import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-signin";
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,18 +23,38 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { z } from "zod";
 
-
-
-
+const emailPasswordSchema = z.object({
+  email: z.string().trim().toLowerCase().min(1, "Email is required").email("Enter a valid email"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
 
 export default function Signup() {
   const router = useRouter();
+  const googleAvailable = useRef(true);
   useEffect(() => {
-  GoogleSignin.configure({
-    webClientId: "878791573905-06m5nll9da4n609is8h3h2gb1gnnf6ea.apps.googleusercontent.com",
-  });
-}, []);
+    const webClientId = '878791573905-l4o19b48935vi4ihk44460kqp3ql5iv8.apps.googleusercontent.com';
+    console.log("[google] webClientId:", webClientId);
+
+    if (!webClientId) {
+      console.warn("[google] EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is missing");
+      return;
+    }
+
+    try {
+      GoogleSignin.configure({ webClientId });
+    } catch (e) {
+      googleAvailable.current = false;
+      if (__DEV__) {
+        console.warn(
+          "GoogleSignin.configure() failed. Rebuild with: npx expo prebuild --clean && npx expo run:android",
+          e
+        );
+      }
+    }
+  }, []);
+
   const [showPassword, setShowPassword] = useState(false);
 
   // ---------- Email + password state ----------
@@ -38,13 +63,10 @@ export default function Signup() {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [loading, setLoading] = useState(false);
   const [generalError, setGeneralError] = useState<string | undefined>();
-  // Disabled until both fields have *something* in them — full validation
-  // (format checks) still runs on press, so this is just the "don't even
-  // let them try yet" gate, not the whole validation story.
   const isFormFilled = email.trim().length > 0 && password.length > 0;
 
   const handleContinue = async () => {
-    const result = signupSchema.safeParse({ email, password });
+    const result = emailPasswordSchema.safeParse({ email, password });
     if (!result.success) {
       const fe = result.error.flatten().fieldErrors;
       setErrors({ email: fe.email?.[0], password: fe.password?.[0] });
@@ -121,47 +143,78 @@ export default function Signup() {
     }
   };
 
+  // ---------- Google sign-in (native GoogleSignin) ----------
+  const [googleLoading, setGoogleLoading] = useState(false);
+
   const handleGoogle = async () => {
-    setGeneralError(undefined);
-    try {
-      const isAvailable = await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      if (!isAvailable) {
-        Alert.alert("Google Play Services not available", "Please install Google Play Services to sign in with Google.");
-        return;
-      }
-      const res = await GoogleSignin.signIn();
-      const idToken = res.data?.idToken;
-      if (!idToken) return;
+  setGeneralError(undefined);
 
-      const { error } = await supabase.auth.signInWithIdToken({
-        provider: "google",
-        token: idToken,
-      });
-      if (error) throw error;
+  if (!googleAvailable.current) {
+    Alert.alert(
+      "Development build required",
+      "Google Sign-In requires a development build. Run 'npx expo run:android' or 'npx expo run:ios' to create one."
+    );
+    return;
+  }
 
-      router.replace("/(tabs)/home"); // your post-auth route
-    } catch (e: any) {
-      if (e.code === statusCodes.SIGN_IN_CANCELLED) {
-        return;
-      }
-      if (e.code === statusCodes.IN_PROGRESS) {
-        return;
-      }
-      if (e.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        Alert.alert("Google Play Services not available", "Please install Google Play Services to sign in with Google.");
-        return;
-      }
-      if (e.message?.includes("RNGoogleSignin") || e.message?.includes("TurboModuleRegistry")) {
-        Alert.alert(
-          "Development build required",
-          "Google Sign-In requires a development build. Run 'npx expo run:android' or 'npx expo run:ios' to create one.",
-          [{ text: "OK", onPress: () => {} }]
-        );
-        return;
-      }
-      setGeneralError("Google sign-in failed. Try again.");
+  setGoogleLoading(true);
+  try {
+    console.log("[google] start");
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    console.log("[google] before signIn");
+    const response = await GoogleSignin.signIn();
+    console.log("[google] response:", JSON.stringify(response));
+
+    if (!isSuccessResponse(response)) {
+      console.log("[google] not success, type:", response.type);
+      return; // real cancel, silent is fine
     }
-  };
+
+    const idToken = response.data.idToken;
+    if (!idToken) {
+      setGeneralError("Google didn't return an ID token.");
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: "google",
+      token: idToken,
+    });
+    console.log("[google] supabase:", { user: data?.user?.id, error });
+    if (error) throw error;
+
+    router.replace("/(tabs)/home");
+  } catch (e) {
+    console.log("[google] catch:", e, (e as any)?.code, (e as any)?.message);
+
+    if (isErrorWithCode(e)) {
+      switch (e.code) {
+        case statusCodes.IN_PROGRESS:
+          return;
+        case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+          Alert.alert(
+            "Google Play Services not available",
+            "Please install Google Play Services to sign in with Google."
+          );
+          return;
+        default:
+          if (e.message?.includes("RNGoogleSignin") || e.message?.includes("TurboModuleRegistry")) {
+            googleAvailable.current = false;
+            Alert.alert(
+              "Development build required",
+              "Google Sign-In requires a development build. Run 'npx expo run:android' or 'npx expo run:ios' to create one."
+            );
+            return;
+          }
+          setGeneralError("Google sign-in failed. Try again.");
+      }
+    } else {
+      setGeneralError((e as any)?.message ?? "Google sign-in failed. Try again.");
+    }
+  } finally {
+    setGoogleLoading(false);
+  }
+};
 
   return (
 
@@ -324,11 +377,17 @@ export default function Signup() {
             <TouchableOpacity
               className="w-full h-15 flex-row items-center justify-start pl-6 gap-6 rounded-full border border-neutral-200 bg-white"
               onPress={handleGoogle}
+              disabled={googleLoading}
+              style={{ opacity: googleLoading ? 0.6 : 1 }}
             >
-              <Image
-                source={require("@/assets/images/google-icon.png")}
-                style={{ width: 20, height: 20 }}
-              />
+              {googleLoading ? (
+                <ActivityIndicator size="small" color="#262626" />
+              ) : (
+                <Image
+                  source={require("@/assets/images/google-icon.png")}
+                  style={{ width: 20, height: 20 }}
+                />
+              )}
               <Text className="text-[15px] font-sans font-semibold text-neutral-950">
                 Continue with Google
               </Text>
