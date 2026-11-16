@@ -36,7 +36,7 @@ export default function Give() {
             className="w-full bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 flex-row items-center gap-4 shadow-sm"
           >
             <View className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-              <Ionicons name="pizza" size={24} color="#a855f7" />
+              <Ionicons name="pizza" size={24} color="orange" />
             </View>
             <View>
               <Text className="font-semibold text-gray-900 dark:text-white">Food & Essentials</Text>
@@ -49,7 +49,7 @@ export default function Give() {
             className="w-full bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 flex-row items-center gap-4 shadow-sm"
           >
             <View className="w-12 h-12 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
-              <Ionicons name="shirt" size={24} color="#ec4899" />
+              <Ionicons name="shirt" size={24} color="lime" />
             </View>
             <View>
               <Text className="font-semibold text-gray-900 dark:text-white">Clothing & Items</Text>
