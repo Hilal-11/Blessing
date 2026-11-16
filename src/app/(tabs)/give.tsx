@@ -29,7 +29,7 @@ export default function Give() {
               <Text className="font-semibold text-gray-900 dark:text-white">Financial Gift</Text>
               <Text className="text-sm text-gray-500 dark:text-gray-400">Send money directly</Text>
             </View>
-            <Ionicons name="chevron-forward" size={24} color="#9ca3af" />
+            <Ionicons name="chevron-forward" size={24} color="#f57" />
           </Pressable>
           
           <Pressable
