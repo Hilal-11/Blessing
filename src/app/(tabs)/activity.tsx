@@ -1,7 +1,7 @@
 'use client';
 
-import {  Text, View, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Activity() {
@@ -17,7 +17,7 @@ export default function Activity() {
               { type: 'blessing', text: 'John sent you a blessing', time: '5h ago', icon: 'gift', color: '#00ff00' },
               { type: 'prayer', text: 'Your request received 10 prayers', time: '1d ago', icon: 'heart', color: '#ffffff' },
               { type: 'blessing', text: 'You blessed Maria\'s family', time: '2d ago', icon: 'gift', color: '#0011ff' },
-              { type: 'prayer', text: 'New prayer request in your area', time: '3d ago', icon: 'heart', color: '#ec4899' },
+              { type: 'prayer', text: 'New prayer request in your area', time: '3d ago', icon: 'heart', color: '#fff' },
             ].map((item, i) => (
               <View key={i} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex-row gap-4">
                 <View className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
