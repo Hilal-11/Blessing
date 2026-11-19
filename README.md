@@ -194,6 +194,9 @@ Because food and physical items are involved:
 
 ---
 
-## 📄 License
+-website: <https://hila-11.com>
+---
+
+## 📄 Licens
 
 _TBD_
